@@ -1,10 +1,9 @@
 import Fastify from "fastify";
+import ssr from "@react-universal-boilerplate/app/ssr";
 
 const fastify = Fastify();
 
-fastify.get("/", () => {
-  return "ok";
-});
+fastify.register(ssr);
 
 fastify.listen(3000, (error) => {
   if (error) {

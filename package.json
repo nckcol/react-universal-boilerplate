@@ -10,5 +10,8 @@
   "license": "ISC",
   "workspaces": [
     "packages/*"
-  ]
+  ],
+  "devDependencies": {
+    "webpack-cli": "^4.9.0"
+  }
 }
