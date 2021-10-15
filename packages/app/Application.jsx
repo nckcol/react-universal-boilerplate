@@ -1,5 +1,7 @@
+import "./main.css";
+
 function Application() {
-  return <h1>Hello</h1>;
+  return <h1>Hello world!</h1>;
 }
 
 export default Application;
