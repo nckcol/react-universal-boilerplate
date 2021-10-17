@@ -9,7 +9,9 @@ const httpProxy = require("fastify-http-proxy");
 const config = require("../webpack.config");
 
 function startServerProcess() {
-  const process = cp.fork(require.resolve("./dev-server.js"));
+  const process = cp.fork(require.resolve("./dev-server.js"), [], {
+    stdio: "inherit",
+  });
 
   return process;
 }
@@ -34,36 +36,56 @@ async function setupDevServer(compiler) {
   );
 }
 
-function setupCompiler(config) {
+function setupCompiler(
+  config,
+  { onInvalid, onFailed, onDone, onWatchClose } = {}
+) {
   const name = "StartTask";
-  const multiCompiler = webpack(config);
+  const compiler = webpack(config);
 
-  let serverProcess;
-
-  multiCompiler.compilers.forEach((compiler) => {
-    compiler.hooks.invalid.tap(name, () => {
-      console.log(compiler.name + ": invalid");
-      if (compiler.name === "node") {
-        serverProcess.kill("SIGHUP");
-      }
-    });
-    compiler.hooks.failed.tap(name, () => {
-      console.log(compiler.name + ": failed");
-    });
-    compiler.hooks.done.tap(name, () => {
-      console.log(compiler.name + ": done");
-      if (compiler.name === "node") {
-        serverProcess = startServerProcess();
-      }
-    });
-    compiler.hooks.watchClose.tap(name, () => {
-      console.log(compiler.name + ": watchClose");
-    });
+  compiler.hooks.invalid.tap(name, () => {
+    console.log(compiler.name + ": invalid");
+    if (onInvalid) {
+      onInvalid();
+    }
+  });
+  compiler.hooks.failed.tap(name, () => {
+    console.log(compiler.name + ": failed");
+    if (onFailed) {
+      onFailed();
+    }
+  });
+  compiler.hooks.done.tap(name, () => {
+    console.log(compiler.name + ": done");
+    if (onDone) {
+      onDone();
+    }
+  });
+  compiler.hooks.watchClose.tap(name, () => {
+    console.log(compiler.name + ": watchClose");
+    if (onWatchClose) {
+      onWatchClose();
+    }
   });
 
-  return multiCompiler;
+  return compiler;
 }
 
-const compiler = setupCompiler(config);
+let serverProcess;
 
-setupDevServer(compiler);
+const browserCompiler = setupCompiler(config({ target: "browser" }));
+const serverCompiler = setupCompiler(config({ target: "server" }), {
+  onInvalid() {
+    serverProcess.kill("SIGHUP");
+  },
+  onDone() {
+    serverProcess = startServerProcess();
+  },
+});
+
+serverCompiler.watch({}, (error) => {
+  if (error) {
+    console.error(error);
+  }
+});
+setupDevServer(browserCompiler);

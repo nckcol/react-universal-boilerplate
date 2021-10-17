@@ -14,7 +14,9 @@
   },
   "browserslist": "last 2 versions",
   "scripts": {
-    "build": "webpack --mode production",
+    "build:browser": "webpack --node-env production --env target=browser",
+    "build:server": "webpack --node-env production --env target=server",
+    "build": "npm run build:server && npm run build:browser",
     "start": "node ./tasks/start.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -24,6 +26,8 @@
     "@babel/core": "^7.15.8",
     "@babel/preset-env": "^7.15.8",
     "@babel/preset-react": "^7.14.5",
+    "@loadable/babel-plugin": "^5.13.2",
+    "@loadable/webpack-plugin": "^5.15.1",
     "babel-loader": "^8.2.2",
     "css-loader": "^6.4.0",
     "fastify": "^3.22.0",
@@ -41,6 +45,8 @@
     "webpack-node-externals": "^3.0.0"
   },
   "dependencies": {
+    "@loadable/component": "^5.15.0",
+    "@loadable/server": "^5.15.1",
     "eta": "^1.12.3",
     "react": "^17.0.2",
     "react-dom": "^17.0.2"

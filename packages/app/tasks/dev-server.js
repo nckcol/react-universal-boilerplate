@@ -1,8 +1,15 @@
+const fs = require("fs");
+const path = require("path");
 const Fastify = require("fastify");
 const ssr = require("@react-universal-boilerplate/app/ssr");
+const paths = require("../paths");
+
+const stats = JSON.parse(
+  fs.readFileSync(path.resolve(paths.dist, "./loadable-stats.json"), "utf-8")
+);
 
 const server = Fastify();
-server.register(ssr);
+server.register(ssr, { stats });
 server.listen(3001, (error) => {
   if (error) {
     console.log(error);
