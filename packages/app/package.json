@@ -4,13 +4,9 @@
   "description": "",
   "main": "dist/index.js",
   "exports": {
-    ".": {
-      "default": "./dist/index.js"
-    },
-    "./ssr": {
-      "import": "./dist/ssr.mjs",
-      "require": "./dist/ssr.js"
-    }
+    ".": "./dist/index.js",
+    "./ssr": "./dist/ssr.js",
+    "./loadable-stats.json": "./dist/loadable-stats.json"
   },
   "browserslist": "last 2 versions",
   "scripts": {

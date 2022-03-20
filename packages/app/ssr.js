@@ -19,15 +19,10 @@ function readStats(filename) {
 }
 
 async function ssr(fastify, options) {
-  const stats = options?.stats
-    ? options.stats
-    : readStats(path.resolve(__dirname, "./loadable-stats.json"));
   const renderTemplate = Eta.compile(template, { autoEscape: false });
 
   fastify.get("/", (request, reply) => {
-    reply.type("text/html");
-
-    const chunkExtractor = new ChunkExtractor({ stats });
+    const chunkExtractor = new ChunkExtractor({ stats: options.stats });
     const jsx = chunkExtractor.collectChunks(createElement(Application));
     const content = renderToString(jsx);
 
@@ -37,6 +32,7 @@ async function ssr(fastify, options) {
     ].join("\n");
     const footer = [chunkExtractor.getScriptTags()].join("\n");
 
+    reply.type("text/html");
     return renderTemplate(
       { locale: "en", content, header, footer },
       Eta.config
