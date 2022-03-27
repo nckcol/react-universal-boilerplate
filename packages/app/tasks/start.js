@@ -1,6 +1,6 @@
 process.env.NODE_ENV = "development";
 
-const cp = require("child_process");
+const { fork } = require("child_process");
 const webpack = require("webpack");
 const Fastify = require("fastify");
 const middie = require("middie");
@@ -9,14 +9,14 @@ const httpProxy = require("fastify-http-proxy");
 const config = require("../webpack.config");
 
 function startServerProcess() {
-  const process = cp.fork(require.resolve("./dev-server.js"), [], {
+  const process = fork(require.resolve("./dev-server.js"), [], {
     stdio: "inherit",
   });
 
   return process;
 }
 
-async function setupDevServer(compiler) {
+async function startDevServer(compiler) {
   const server = Fastify();
 
   server.register(httpProxy, { upstream: "http://localhost:3001" });
@@ -31,9 +31,7 @@ async function setupDevServer(compiler) {
     })
   );
 
-  server.listen(3000, () =>
-    console.log("App is running on http://localhost:3000")
-  );
+  await server.listen(3000);
 }
 
 function setupCompiler(
@@ -71,21 +69,103 @@ function setupCompiler(
   return compiler;
 }
 
-let serverProcess;
+function Runtime({ onInvalid, onReady }) {
+  // RUNNING -> CLIENT_RECOMPILATION -> CLIENT_DONE -> SERVER_DONE -> RUNNING
+  // RUNNING -> SERVER_RECOMPILATION -> SERVER_DONE -> RUNNING
+  let invalidTriggered = false;
+  let clientReady = false;
+  let serverReady = false;
 
-const browserCompiler = setupCompiler(config({ target: "browser" }));
-const serverCompiler = setupCompiler(config({ target: "server" }), {
-  onInvalid() {
-    serverProcess.kill("SIGHUP");
-  },
-  onDone() {
-    serverProcess = startServerProcess();
-  },
-});
-
-serverCompiler.watch({}, (error) => {
-  if (error) {
-    console.error(error);
+  function invalid() {
+    if (!invalidTriggered) {
+      invalidTriggered = true;
+      onInvalid();
+    }
   }
-});
-setupDevServer(browserCompiler);
+
+  function checkReady() {
+    if (clientReady && serverReady) {
+      invalidTriggered = false;
+      onReady();
+    }
+  }
+
+  return {
+    clientInvalid() {
+      clientReady = false;
+      serverReady = false;
+      invalid();
+    },
+    serverInvalid() {
+      serverReady = false;
+      invalid();
+    },
+    clientDone() {
+      clientReady = true;
+      checkReady();
+    },
+    serverDone() {
+      serverReady = true;
+      checkReady();
+    },
+  };
+}
+
+function ServerProcess() {
+  let process = null;
+  return {
+    start() {
+      process = startServerProcess();
+    },
+    stop() {
+      if (!process) {
+        return;
+      }
+      process.kill("SIGHUP");
+      process = null;
+    },
+  };
+}
+
+async function run() {
+  const serverProcess = ServerProcess();
+
+  const runtime = Runtime({
+    onInvalid: () => {
+      serverProcess.stop();
+    },
+    onReady: () => {
+      serverProcess.start();
+    },
+  });
+
+  const browserCompiler = setupCompiler(config({ target: "browser" }), {
+    onInvalid: runtime.clientInvalid,
+    onDone: runtime.clientDone,
+  });
+  const serverCompiler = setupCompiler(config({ target: "server" }), {
+    onInvalid: runtime.serverInvalid,
+    onDone: runtime.serverDone,
+  });
+
+  serverCompiler.watch({}, (error) => {
+    if (error) {
+      console.error(error);
+      process.exit(1);
+    }
+  });
+
+  try {
+    await startDevServer(browserCompiler);
+  } catch (error) {
+    console.error(error);
+    process.exit(1);
+  }
+
+  console.log("App is running on http://localhost:3000");
+
+  // invalid server -> build server + restart server
+  // invalid client -> build client and server + restart server
+}
+
+run();

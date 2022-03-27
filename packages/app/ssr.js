@@ -1,22 +1,9 @@
-import fs from "fs";
-import path from "path";
-import { createElement } from "react";
-import { renderToString } from "react-dom/server.js";
 import * as Eta from "eta";
+import { createElement } from "react";
+import { renderToString } from "react-dom/server";
+import { ChunkExtractor } from "@loadable/server";
 import Application from "./Application";
 import template from "!!raw-loader!./index.html";
-import { ChunkExtractor } from "@loadable/server";
-
-function readStats(filename) {
-  try {
-    const content = fs.readFileSync(filename, "utf-8");
-    const stats = JSON.parse(content);
-    return stats;
-  } catch (e) {
-    console.log(e);
-    return null;
-  }
-}
 
 async function ssr(fastify, options) {
   const renderTemplate = Eta.compile(template, { autoEscape: false });
