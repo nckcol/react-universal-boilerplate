@@ -1,66 +1,71 @@
-process.env.NODE_ENV = "development";
+const Webpack = require("webpack");
+const WebpackDevServer = require("webpack-dev-server");
+const webpackConfig = require("../webpack.config");
+const paths = require("../paths");
 
-const { fork } = require("child_process");
-const webpack = require("webpack");
-const Fastify = require("fastify");
-const middie = require("middie");
-const webpackDevMiddleware = require("webpack-dev-middleware");
-const httpProxy = require("fastify-http-proxy");
-const config = require("../webpack.config");
+const STATIC_SERVER_HOST = "0.0.0.0";
+const STATIC_SERVER_PORT = process.env.STATIC_SERVER_PORT;
 
-function startServerProcess() {
-  const process = fork(require.resolve("./dev-server.js"), [], {
-    stdio: "inherit",
-  });
-
-  return process;
-}
-
-async function startDevServer(compiler) {
-  const server = Fastify();
-
-  server.register(httpProxy, { upstream: "http://localhost:3001" });
-
-  await server.register(middie);
-
-  server.use(
-    webpackDevMiddleware(compiler, {
-      index: false,
-      stats: false,
-      writeToDisk: true,
-    })
-  );
-
-  await server.listen(3000);
-}
+const options = {
+  host: STATIC_SERVER_HOST,
+  port: STATIC_SERVER_PORT,
+  compress: true,
+  hot: "only",
+  allowedHosts: "all",
+  headers: {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "*",
+    "Access-Control-Allow-Headers": "*",
+  },
+  // static: {
+  //   directory: paths.public,
+  //   serveIndex: false,
+  // },
+  static: false,
+  client: {
+    logging: "error",
+    overlay: {
+      errors: true,
+      warnings: false,
+    },
+  },
+  devMiddleware: {
+    index: false,
+    // writeToDisk: true,
+  },
+  // proxy: {
+  //   context: () => true,
+  //   target: "http://localhost:3000",
+  // },
+};
 
 function setupCompiler(
   config,
   { onInvalid, onFailed, onDone, onWatchClose } = {}
 ) {
   const name = "StartTask";
-  const compiler = webpack(config);
+  const compiler = Webpack(config);
 
   compiler.hooks.invalid.tap(name, () => {
-    console.log(compiler.name + ": invalid");
+    // console.log(compiler.name + ": invalid");
     if (onInvalid) {
       onInvalid();
     }
   });
   compiler.hooks.failed.tap(name, () => {
-    console.log(compiler.name + ": failed");
+    // console.log(compiler.name + ": failed");
     if (onFailed) {
       onFailed();
     }
   });
-  compiler.hooks.done.tap(name, () => {
-    console.log(compiler.name + ": done");
+  compiler.hooks.done.tap(name, (stats) => {
+    // console.log(compiler.name + ": done");
     if (onDone) {
       onDone();
     }
   });
   compiler.hooks.watchClose.tap(name, () => {
-    console.log(compiler.name + ": watchClose");
+    // console.log(compiler.name + ": watchClose");
     if (onWatchClose) {
       onWatchClose();
     }
@@ -111,39 +116,28 @@ function Runtime({ onInvalid, onReady }) {
   };
 }
 
-function ServerProcess() {
-  let process = null;
-  return {
-    start() {
-      process = startServerProcess();
-    },
-    stop() {
-      if (!process) {
-        return;
-      }
-      process.kill("SIGHUP");
-      process = null;
-    },
-  };
-}
-
 async function run() {
-  const serverProcess = ServerProcess();
-
   const runtime = Runtime({
     onInvalid: () => {
-      serverProcess.stop();
+      process.send("invalid");
     },
     onReady: () => {
-      serverProcess.start();
+      process.send("ready");
     },
   });
 
-  const browserCompiler = setupCompiler(config({ target: "browser" }), {
+  const browserConfig = webpackConfig({ target: "browser" });
+  browserConfig.stats = false; //{ logging: "none" };
+  browserConfig.infrastructureLogging = { level: "none" };
+  // We need this for correct work of HMR
+  browserConfig.output.publicPath = `http://${STATIC_SERVER_HOST}:${STATIC_SERVER_PORT}${browserConfig.output.publicPath}`;
+  const browserCompiler = setupCompiler(browserConfig, {
     onInvalid: runtime.clientInvalid,
     onDone: runtime.clientDone,
   });
-  const serverCompiler = setupCompiler(config({ target: "server" }), {
+
+  const serverConfig = webpackConfig({ target: "server" });
+  const serverCompiler = setupCompiler(serverConfig, {
     onInvalid: runtime.serverInvalid,
     onDone: runtime.serverDone,
   });
@@ -155,15 +149,9 @@ async function run() {
     }
   });
 
-  try {
-    await startDevServer(browserCompiler);
-  } catch (error) {
-    console.error(error);
-    process.exit(1);
-  }
+  const devServer = new WebpackDevServer(options, browserCompiler);
 
-  console.log("App is running on http://localhost:3000");
-
+  await devServer.start();
   // invalid server -> build server + restart server
   // invalid client -> build client and server + restart server
 }

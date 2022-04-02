@@ -6,28 +6,34 @@
   "exports": {
     ".": "./dist/index.js",
     "./ssr": "./dist/ssr.js",
-    "./loadable-stats.json": "./dist/loadable-stats.json"
+    "./stats.json": "./dist/static/loadable-stats.json"
   },
   "browserslist": "last 2 versions",
   "scripts": {
     "build:browser": "webpack --node-env production --env target=browser",
     "build:server": "webpack --node-env production --env target=server",
     "build": "npm run build:server && npm run build:browser",
-    "start": "node ./tasks/start.js",
+    "watch:browser": "webpack watch --node-env development --env target=browser",
+    "start": "cross-env NODE_ENV=development node ./tasks/start-with-ssr.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@babel/core": "^7.15.8",
+    "@babel/plugin-transform-runtime": "^7.17.0",
     "@babel/preset-env": "^7.15.8",
     "@babel/preset-react": "^7.14.5",
     "@loadable/babel-plugin": "^5.13.2",
     "@loadable/webpack-plugin": "^5.15.1",
+    "@pmmmwh/react-refresh-webpack-plugin": "0.5.3",
     "babel-loader": "^8.2.2",
+    "cross-env": "^7.0.3",
     "css-loader": "^6.4.0",
     "fastify": "^3.22.0",
     "fastify-http-proxy": "^6.2.1",
+    "fastify-static": "^4.6.1",
+    "fs-extra": "^10.0.1",
     "ignore-loader": "^0.1.2",
     "middie": "^5.3.0",
     "mini-css-extract-plugin": "^2.4.2",
@@ -35,9 +41,11 @@
     "postcss-loader": "^6.2.0",
     "postcss-preset-env": "^6.7.0",
     "raw-loader": "^4.0.2",
+    "react-refresh": "0.11.0",
     "style-loader": "^3.3.0",
-    "webpack": "^5.59.0",
-    "webpack-dev-middleware": "^5.2.1",
+    "webpack": "^5.70.0",
+    "webpack-cli": "^4.9.2",
+    "webpack-dev-server": "^4.7.4",
     "webpack-node-externals": "^3.0.0"
   },
   "dependencies": {

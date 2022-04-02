@@ -1,13 +1,16 @@
 import Fastify from "fastify";
 import url from "url";
 import fs from "fs-extra";
-import { resolve } from 'import-meta-resolve';
+import { resolve } from "import-meta-resolve";
 import ssr from "@react-universal-boilerplate/app/ssr";
 
 const fastify = Fastify();
 
 async function readStats() {
-  const moduleUrl = await resolve('@react-universal-boilerplate/app/loadable-stats.json', import.meta.url);
+  const moduleUrl = await resolve(
+    "@react-universal-boilerplate/app/stats.json",
+    import.meta.url
+  );
   const filename = url.fileURLToPath(moduleUrl);
   return await fs.readJSON(filename);
 }

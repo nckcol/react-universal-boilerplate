@@ -8,7 +8,7 @@ import template from "!!raw-loader!./index.html";
 async function ssr(fastify, options) {
   const renderTemplate = Eta.compile(template, { autoEscape: false });
 
-  fastify.get("/", (request, reply) => {
+  fastify.get("/*", (request, reply) => {
     const chunkExtractor = new ChunkExtractor({ stats: options.stats });
     const jsx = chunkExtractor.collectChunks(createElement(Application));
     const content = renderToString(jsx);
