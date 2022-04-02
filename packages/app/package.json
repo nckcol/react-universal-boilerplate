@@ -37,6 +37,7 @@
     "ignore-loader": "^0.1.2",
     "middie": "^5.3.0",
     "mini-css-extract-plugin": "^2.4.2",
+    "picocolors": "^1.0.0",
     "postcss": "^8.3.9",
     "postcss-loader": "^6.2.0",
     "postcss-preset-env": "^6.7.0",

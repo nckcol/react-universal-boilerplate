@@ -163,16 +163,13 @@ function config(env) {
         new webpack.DefinePlugin({
           "process.env.NODE_ENV": JSON.stringify(ENV),
         }),
-
+        new LoadablePlugin({ writeToDisk: ENV_DEVELOPMENT }),
         ENV_PRODUCTION &&
           new MiniCssExtractPlugin({ filename: "[name].[contenthash:6].css" }),
-
         ENV_DEVELOPMENT &&
           new ReactRefreshWebpackPlugin({
             overlay: false,
           }),
-
-        new LoadablePlugin({ writeToDisk: ENV_DEVELOPMENT }),
       ]),
       server: [],
     }),

@@ -1,7 +1,9 @@
+const pc = require("picocolors");
 const Webpack = require("webpack");
 const WebpackDevServer = require("webpack-dev-server");
 const webpackConfig = require("../webpack.config");
 const paths = require("../paths");
+const formatWebpackMessages = require("../../dev/format-webpack-messages");
 
 const STATIC_SERVER_HOST = "0.0.0.0";
 const STATIC_SERVER_PORT = process.env.STATIC_SERVER_PORT;
@@ -58,10 +60,24 @@ function setupCompiler(
       onFailed();
     }
   });
-  compiler.hooks.done.tap(name, (stats) => {
+  compiler.hooks.done.tap(name, (webpackStats) => {
     // console.log(compiler.name + ": done");
     if (onDone) {
-      onDone();
+      const stats = webpackStats.toJson({
+        all: false,
+        errorsCount: true,
+        errors: true,
+        warnings: true,
+      });
+
+      const messages = formatWebpackMessages(stats);
+
+      if (stats.errorsCount > 0) {
+        onDone(true, messages);
+        return;
+      }
+
+      onDone(null, messages);
     }
   });
   compiler.hooks.watchClose.tap(name, () => {
@@ -80,6 +96,10 @@ function Runtime({ onInvalid, onReady }) {
   let invalidTriggered = false;
   let clientReady = false;
   let serverReady = false;
+  let clientError = false;
+  let serverError = false;
+  let clientMessages = null;
+  let serverMessages = null;
 
   function invalid() {
     if (!invalidTriggered) {
@@ -91,28 +111,49 @@ function Runtime({ onInvalid, onReady }) {
   function checkReady() {
     if (clientReady && serverReady) {
       invalidTriggered = false;
-      onReady();
+      onReady(clientError || serverError, { clientMessages, serverMessages });
     }
   }
 
-  return {
-    clientInvalid() {
+  const clientHooks = {
+    onInvalid() {
+      clientError = false;
       clientReady = false;
+      clientMessages = null;
+      serverError = false;
       serverReady = false;
       invalid();
     },
-    serverInvalid() {
-      serverReady = false;
-      invalid();
-    },
-    clientDone() {
+    onDone(error, messages) {
+      if (error) {
+        clientError = true;
+      }
+      clientMessages = messages;
       clientReady = true;
       checkReady();
     },
-    serverDone() {
+  };
+
+  const serverHooks = {
+    onInvalid() {
+      serverError = false;
+      serverReady = false;
+      serverMessages = null;
+      invalid();
+    },
+    onDone(error, messages) {
+      if (error) {
+        serverError = true;
+      }
+      serverMessages = messages;
       serverReady = true;
       checkReady();
     },
+  };
+
+  return {
+    clientHooks,
+    serverHooks,
   };
 }
 
@@ -121,26 +162,45 @@ async function run() {
     onInvalid: () => {
       process.send("invalid");
     },
-    onReady: () => {
+    onReady: (error, { clientMessages, serverMessages }) => {
+      if (error) {
+        process.send("error");
+
+        if (clientMessages?.errors?.length > 0) {
+          console.log(pc.red(pc.bold("Client was built with errors:\n")));
+          clientMessages.errors.forEach((error) => console.log(error + "\n"));
+          return;
+        }
+
+        if (serverMessages?.errors?.length > 0) {
+          console.log(pc.red(pc.bold("Server was built with errors:\n")));
+          serverMessages.errors.forEach((error) => console.log(error + "\n"));
+        }
+
+        return;
+      }
+
       process.send("ready");
+
+      if (clientMessages?.warnings?.length > 0) {
+        console.log(pc.orange(pc.bold("Client was built with warnings:\n")));
+        clientMessages.warnings.forEach((warning) =>
+          console.log(warning + "\n")
+        );
+        return;
+      }
+
+      if (serverMessages?.warnings?.length > 0) {
+        console.log(pc.orange(pc.bold("Server was built with warnings:\n")));
+        serverMessages.warnings.forEach((warning) =>
+          console.log(warning + "\n")
+        );
+      }
     },
   });
 
-  const browserConfig = webpackConfig({ target: "browser" });
-  browserConfig.stats = false; //{ logging: "none" };
-  browserConfig.infrastructureLogging = { level: "none" };
-  // We need this for correct work of HMR
-  browserConfig.output.publicPath = `http://${STATIC_SERVER_HOST}:${STATIC_SERVER_PORT}${browserConfig.output.publicPath}`;
-  const browserCompiler = setupCompiler(browserConfig, {
-    onInvalid: runtime.clientInvalid,
-    onDone: runtime.clientDone,
-  });
-
   const serverConfig = webpackConfig({ target: "server" });
-  const serverCompiler = setupCompiler(serverConfig, {
-    onInvalid: runtime.serverInvalid,
-    onDone: runtime.serverDone,
-  });
+  const serverCompiler = setupCompiler(serverConfig, runtime.serverHooks);
 
   serverCompiler.watch({}, (error) => {
     if (error) {
@@ -148,6 +208,13 @@ async function run() {
       process.exit(1);
     }
   });
+
+  const browserConfig = webpackConfig({ target: "browser" });
+  browserConfig.stats = false; //{ logging: "none" };
+  browserConfig.infrastructureLogging = { level: "none" };
+  // We need this for correct work of HMR
+  browserConfig.output.publicPath = `http://${STATIC_SERVER_HOST}:${STATIC_SERVER_PORT}${browserConfig.output.publicPath}`;
+  const browserCompiler = setupCompiler(browserConfig, runtime.clientHooks);
 
   const devServer = new WebpackDevServer(options, browserCompiler);
 
